@@ -935,9 +935,16 @@ if CLIENT then
         }
     end
 
-    local IsDepthPass
-    local DrawTrackModel
-    local UsesMWBaseViewModel
+    local function DrawGShaderFriendlyModel(model, flags)
+        if not IsValid(model) then return end
+
+        model:DrawModel(flags)
+    end
+
+    local function UsesMWBaseViewModel(weapon)
+        return IsValid(weapon) and IsValid(weapon.m_ViewModel)
+    end
+
     local posparentcache
     local function ApplyLegacyLeftArmVisible(track, vm, handsEnt, ply, weapon, flags)
         if not IsValid(track.model) or not IsValid(vm) then return end
@@ -983,7 +990,7 @@ if CLIENT then
         if flipmode then
             render.CullMode(MATERIAL_CULLMODE_CW)
         end
-        track.model:DrawModel(flags)
+        DrawGShaderFriendlyModel(track.model, flags)
         render.CullMode(MATERIAL_CULLMODE_CCW)
 
         local rigpick = GCAL.GROUPS.LEFT_ARM
@@ -1057,7 +1064,7 @@ if CLIENT then
         track.model:SetupBones()
         if flipmode then render.CullMode(MATERIAL_CULLMODE_CW) end
         if not thirdperson and not suppressSourceDraw then
-            track.model:DrawModel(flags)
+            DrawGShaderFriendlyModel(track.model, flags)
         end
         render.CullMode(MATERIAL_CULLMODE_CCW)
 
@@ -1112,43 +1119,6 @@ if CLIENT then
     end
 
     local curtimecheck = 0
-    function IsDepthPass(flags)
-        flags = flags or STUDIO_RENDER or 0
-        return bit.band(flags, STUDIO_SSAODEPTHTEXTURE or 0) ~= 0 or bit.band(flags, STUDIO_SHADOWDEPTHTEXTURE or 0) ~= 0
-    end
-
-    function DrawTrackModel(model, flags, forceIgnoreZ)
-        if not IsValid(model) then return end
-
-        cam.IgnoreZ(forceIgnoreZ)
-        render.DepthRange(0, 0.1)
-        model:DrawModel(flags)
-        render.DepthRange(0, 1)
-        cam.IgnoreZ(true)
-    end
-
-    local function SetDepthPassNoDraw(noDraw)
-        for id, track in pairs(GCAL.ActiveTracks or {}) do
-            if id == "legs" then continue end
-
-            if IsValid(track.model) then
-                track.model:SetNoDraw(noDraw)
-            end
-        end
-    end
-
-    function UsesMWBaseViewModel(weapon)
-        return IsValid(weapon) and IsValid(weapon.m_ViewModel)
-    end
-
-    local function WantsDepthPass()
-        for id in pairs(GCAL.ActiveTracks or {}) do
-            if id ~= "legs" then return true end
-        end
-
-        return false
-    end
-
     local function ProcessQueuedTracks()
         for queuedTrackID, queuedName in pairs(GCAL.QueuedAnims) do
             if not GCAL.ActiveTracks[queuedTrackID] and GCAL:Play(queuedName, queuedTrackID) then
@@ -1157,25 +1127,32 @@ if CLIENT then
         end
     end
 
+    local renderTracksBusy = false
     local function RenderTracks(hands, vm, ply, weapon, flags, fromHandsHook)
+        if renderTracksBusy then return end
         if not IsValid(vm) then return end
+        if UsesMWBaseViewModel(weapon) then return end
+
+        renderTracksBusy = true
         local handsEnt = IsValid(hands) and hands or (IsValid(ply) and ply:GetHands() or nil)
         if IsValid(handsEnt) then
             handsEnt:SetupBones()
         end
 
-        ProcessQueuedTracks()
+        curtime = CurTime()
+        local alreadyUpdated = curtime == curtimecheck and !gui.IsGameUIVisible()
+        if not alreadyUpdated then
+            curtimecheck = curtime
+            ProcessQueuedTracks()
+        end
 
         if table.Count(GCAL.ActiveTracks) == 0 then
-            if VManip and VManip.QueuedAnim and VManip:PlayAnim(VManip.QueuedAnim) then
+            if not alreadyUpdated and VManip and VManip.QueuedAnim and VManip:PlayAnim(VManip.QueuedAnim) then
                 VManip.QueuedAnim = nil
             end
+            renderTracksBusy = false
             return
         end
-        
-        curtime = CurTime()
-        if curtime == curtimecheck and !gui.IsGameUIVisible() then return end
-        curtimecheck = curtime
 
         local vment = hook.Run("VManipVMEntity", ply, weapon)
         if IsValid(vment) then vm = vment end
@@ -1187,11 +1164,13 @@ if CLIENT then
             end
 
             if id == "legs" then 
-                UpdateTrack(track, id)
+                if not alreadyUpdated then
+                    UpdateTrack(track, id)
+                end
                 continue 
             end
             
-            if UpdateTrack(track, id) then continue end
+            if not alreadyUpdated and UpdateTrack(track, id) then continue end
             if id == "legacy_left_arm" then
                 ApplyLegacyLeftArmVisible(track, vm, handsEnt, ply, weapon, flags)
             else
@@ -1200,6 +1179,7 @@ if CLIENT then
         end
 
         if IsValid(handsEnt) then handsEnt:InvalidateBoneCache() end
+        renderTracksBusy = false
     end
 
     local thirdpersonFrame = 0

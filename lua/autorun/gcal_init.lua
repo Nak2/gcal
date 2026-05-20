@@ -19,7 +19,6 @@ if CLIENT then
         ["3425927104"] = "Vmanip Base with knockdown",
         ["2844472642"] = "Vmanip +",
         ["3714993549"] = "Vmanip (Lite)",
-        ["3542644649"] = "Gshader Library" -- This is only temporary and working on a fix!!!
         -- ["1234567890"] = "Example Addon"
     }
 

@@ -935,6 +935,9 @@ if CLIENT then
         }
     end
 
+    local IsDepthPass
+    local DrawTrackModel
+    local UsesMWBaseViewModel
     local posparentcache
     local function ApplyLegacyLeftArmVisible(track, vm, handsEnt, ply, weapon, flags)
         if not IsValid(track.model) or not IsValid(vm) then return end
@@ -980,7 +983,7 @@ if CLIENT then
         if flipmode then
             render.CullMode(MATERIAL_CULLMODE_CW)
         end
-        track.model:DrawModel(flags)
+        DrawTrackModel(track.model, flags, not UsesMWBaseViewModel(weapon))
         render.CullMode(MATERIAL_CULLMODE_CCW)
 
         local rigpick = GCAL.GROUPS.LEFT_ARM
@@ -1054,7 +1057,7 @@ if CLIENT then
         track.model:SetupBones()
         if flipmode then render.CullMode(MATERIAL_CULLMODE_CW) end
         if not thirdperson and not suppressSourceDraw then
-            track.model:DrawModel(flags)
+            DrawTrackModel(track.model, flags, not UsesMWBaseViewModel(weapon))
         end
         render.CullMode(MATERIAL_CULLMODE_CCW)
 
@@ -1109,9 +1112,33 @@ if CLIENT then
     end
 
     local curtimecheck = 0
-    local function IsDepthPass(flags)
+    function IsDepthPass(flags)
         flags = flags or STUDIO_RENDER or 0
         return bit.band(flags, STUDIO_SSAODEPTHTEXTURE or 0) ~= 0 or bit.band(flags, STUDIO_SHADOWDEPTHTEXTURE or 0) ~= 0
+    end
+
+    function DrawTrackModel(model, flags, forceIgnoreZ)
+        if not IsValid(model) then return end
+
+        cam.IgnoreZ(forceIgnoreZ)
+        render.DepthRange(0, 0.1)
+        model:DrawModel(flags)
+        render.DepthRange(0, 1)
+        cam.IgnoreZ(true)
+    end
+
+    local function SetDepthPassNoDraw(noDraw)
+        for id, track in pairs(GCAL.ActiveTracks or {}) do
+            if id == "legs" then continue end
+
+            if IsValid(track.model) then
+                track.model:SetNoDraw(noDraw)
+            end
+        end
+    end
+
+    function UsesMWBaseViewModel(weapon)
+        return IsValid(weapon) and IsValid(weapon.m_ViewModel)
     end
 
     local function WantsDepthPass()
@@ -1205,16 +1232,45 @@ if CLIENT then
         end
     end
 
+    hook.Add("PreDrawViewModel", "GCAL_DepthPassModels", function(vm, ply, weapon, flags)
+        if not IsDepthPass(flags) then return end
+        if ply ~= LocalPlayer() or not IsValid(ply) or not ply:Alive() then return end
+
+        RenderTracks(nil, vm, ply, weapon, flags, false)
+        if not UsesMWBaseViewModel(weapon) then
+            SetDepthPassNoDraw(false)
+        end
+    end)
+
+    hook.Add("PostDrawPlayerHands", "GCAL_DepthPassModels", function(hands, vm, ply, weapon, flags)
+        if IsDepthPass(flags) then
+            SetDepthPassNoDraw(true)
+            cam.IgnoreZ(false)
+        end
+    end)
+
     hook.Add("PreDrawPlayerHands", "GCAL_RenderHands", function(hands, vm, ply, weapon, flags)
         RenderTracks(hands, vm, ply, weapon, flags, true)
     end)
 
     hook.Add("PostDrawViewModel", "VManip", function(vm, ply, weapon, flags)
+        if IsDepthPass(flags) then
+            SetDepthPassNoDraw(true)
+            cam.IgnoreZ(false)
+            return
+        end
+
         if not IsValid(weapon) or not weapon:IsScripted() then return end
         RenderTracks(nil, vm, ply, weapon, flags, false)
     end)
 
     hook.Add("PostDrawViewModel", "GCAL_RenderVM", function(vm, ply, weapon, flags)
+        if IsDepthPass(flags) then
+            SetDepthPassNoDraw(true)
+            cam.IgnoreZ(false)
+            return
+        end
+
         if not IsValid(weapon) or not weapon:IsScripted() or weapon.UseHands then return end
         RenderTracks(nil, vm, ply, weapon, flags, false)
     end)

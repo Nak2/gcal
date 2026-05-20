@@ -53,7 +53,6 @@ if CLIENT then
     end
 
     local function ShowConflictPopup(hasLegacyFile, mountedConflicts)
-        local hasNikNaks = false
         local lines = {
             "Conflicting addons were detected.",
             "Please disable them to prevent conflicts.",
@@ -70,19 +69,8 @@ if CLIENT then
             lines[#lines + 1] = ""
             lines[#lines + 1] = "Mounted Workshop conflicts:"
 
-            for _, addon in ipairs(mountedConflicts) do
-                if addon.id == "2861839844" then
-                    hasNikNaks = true
-                end
-
                 lines[#lines + 1] = " - " .. addon.display
             end
-        end
-
-        if hasNikNaks then
-            lines[#lines + 1] = "NikNaks note:"
-            lines[#lines + 1] = 'If you are wondering what is NikNaks: "imagine pissing on your computer and then going to see if your computer will still turn on after it\'s been soaked in piss" - Neosun'
-            lines[#lines + 1] = "NikNaks breaks a lot of addons, including GCAL. I suggest uninstalling it. In case of GCAL it breaks animations not rendering."
         end
 
         surface.PlaySound("buttons/button10.wav")
@@ -133,17 +121,6 @@ if CLIENT then
         content:DockMargin(14, 80, 14, 104)
 
         local y = 0
-        for _, line in ipairs(lines) do
-            local label = content:Add("DLabel")
-            label:Dock(TOP)
-            label:DockMargin(8, y == 0 and 0 or 0, 8, line == "" and 10 or 4)
-            label:SetWrap(true)
-            label:SetAutoStretchVertical(true)
-            label:SetFont(line == "NikNaks note:" and "DermaLarge" or "Trebuchet18")
-            label:SetTextColor(line == "NikNaks note:" and Color(255, 210, 140) or Color(236, 242, 255))
-            label:SetText(line == "" and " " or line)
-            y = y + 1
-        end
 
         local workshopButton = vgui.Create("DButton", frame)
         workshopButton:Dock(BOTTOM)

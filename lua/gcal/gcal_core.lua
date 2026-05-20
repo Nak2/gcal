@@ -1109,6 +1109,19 @@ if CLIENT then
     end
 
     local curtimecheck = 0
+    local function IsDepthPass(flags)
+        flags = flags or STUDIO_RENDER or 0
+        return bit.band(flags, STUDIO_SSAODEPTHTEXTURE or 0) ~= 0 or bit.band(flags, STUDIO_SHADOWDEPTHTEXTURE or 0) ~= 0
+    end
+
+    local function WantsDepthPass()
+        for id in pairs(GCAL.ActiveTracks or {}) do
+            if id ~= "legs" then return true end
+        end
+
+        return false
+    end
+
     local function ProcessQueuedTracks()
         for queuedTrackID, queuedName in pairs(GCAL.QueuedAnims) do
             if not GCAL.ActiveTracks[queuedTrackID] and GCAL:Play(queuedName, queuedTrackID) then
@@ -1119,23 +1132,29 @@ if CLIENT then
 
     local function RenderTracks(hands, vm, ply, weapon, flags, fromHandsHook)
         if not IsValid(vm) then return end
+        local depthPass = IsDepthPass(flags)
         local handsEnt = IsValid(hands) and hands or (IsValid(ply) and ply:GetHands() or nil)
         if IsValid(handsEnt) then
             handsEnt:SetupBones()
         end
 
-        ProcessQueuedTracks()
+        if not depthPass then
+            ProcessQueuedTracks()
+        end
 
         if table.Count(GCAL.ActiveTracks) == 0 then
-            if VManip and VManip.QueuedAnim and VManip:PlayAnim(VManip.QueuedAnim) then
+            if not depthPass and VManip and VManip.QueuedAnim and VManip:PlayAnim(VManip.QueuedAnim) then
                 VManip.QueuedAnim = nil
             end
             return
         end
         
         curtime = CurTime()
-        if curtime == curtimecheck and !gui.IsGameUIVisible() then return end
-        curtimecheck = curtime
+        local alreadyUpdated = curtime == curtimecheck and !gui.IsGameUIVisible()
+        if alreadyUpdated and not depthPass then return end
+        if not depthPass then
+            curtimecheck = curtime
+        end
 
         local vment = hook.Run("VManipVMEntity", ply, weapon)
         if IsValid(vment) then vm = vment end
@@ -1147,11 +1166,13 @@ if CLIENT then
             end
 
             if id == "legs" then 
-                UpdateTrack(track, id)
+                if not depthPass then
+                    UpdateTrack(track, id)
+                end
                 continue 
             end
             
-            if UpdateTrack(track, id) then continue end
+            if not depthPass and UpdateTrack(track, id) then continue end
             if id == "legacy_left_arm" then
                 ApplyLegacyLeftArmVisible(track, vm, handsEnt, ply, weapon, flags)
             else
@@ -1431,21 +1452,26 @@ if CLIENT then
     end, nil, "Stop one GCAL track, or every active track when no track is provided. Usage: gcal_stop [track]")
 
     hook.Add("NeedsDepthPass", "GCAL_VManipCamAttachment", function()
-        local track = GCAL.ActiveTracks["legacy_left_arm"]
-        if not track then return end
-        local ply = LocalPlayer()
-        if not IsValid(ply) or not ply:Alive() then
-            GCAL:StopTrack("legacy_left_arm")
-            return
-        end
+        if not WantsDepthPass() then return end
 
-        if IsValid(track.camModel) then
-            track.camModel:SetupBones()
-            local attachments = track.camModel:GetAttachments()
-            if #attachments > 0 then
-                track.attachment = track.camModel:GetAttachment(attachments[1].id)
+        local track = GCAL.ActiveTracks["legacy_left_arm"]
+        if track then
+            local ply = LocalPlayer()
+            if not IsValid(ply) or not ply:Alive() then
+                GCAL:StopTrack("legacy_left_arm")
+                return
+            end
+
+            if IsValid(track.camModel) then
+                track.camModel:SetupBones()
+                local attachments = track.camModel:GetAttachments()
+                if #attachments > 0 then
+                    track.attachment = track.camModel:GetAttachment(attachments[1].id)
+                end
             end
         end
+
+        return true
     end)
 
     hook.Add("CalcView", "GCAL_VManipCam", function(ply, origin, angles, fov, self)

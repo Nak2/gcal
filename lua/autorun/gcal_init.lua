@@ -56,7 +56,7 @@ if CLIENT then
         local lines = {
             "Conflicting addons were detected.",
             "Please disable them to prevent conflicts.",
-            "GCAL won't work with those properly ",
+            "GCAL won't work with those properly.",
             "If you post a bug/issue with any of these addons on, you'll get laughed at and/or ignored. So please disable them before using GCAL.",
         }
 
@@ -69,6 +69,7 @@ if CLIENT then
             lines[#lines + 1] = ""
             lines[#lines + 1] = "Mounted Workshop conflicts:"
 
+            for _, addon in ipairs(mountedConflicts) do
                 lines[#lines + 1] = " - " .. addon.display
             end
         end
@@ -121,6 +122,17 @@ if CLIENT then
         content:DockMargin(14, 80, 14, 104)
 
         local y = 0
+        for _, line in ipairs(lines) do
+            local label = content:Add("DLabel")
+            label:Dock(TOP)
+            label:DockMargin(8, y == 0 and 0 or 0, 8, line == "" and 10 or 4)
+            label:SetWrap(true)
+            label:SetAutoStretchVertical(true)
+            label:SetFont("Trebuchet18")
+            label:SetTextColor(Color(236, 242, 255))
+            label:SetText(line == "" and " " or line)
+            y = y + 1
+        end
 
         local workshopButton = vgui.Create("DButton", frame)
         workshopButton:Dock(BOTTOM)

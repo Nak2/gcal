@@ -18,8 +18,7 @@ if CLIENT then
         ["3039950711"] = "VManip (Fix_and_function)",
         ["3425927104"] = "Vmanip Base with knockdown",
         ["2844472642"] = "Vmanip +",
-        ["3714993549"] = "Vmanip (Lite)",
-        ["2861839844"] = "NikNaks"
+        ["3714993549"] = "Vmanip (Lite)"
         -- ["1234567890"] = "Example Addon"
     }
 
